@@ -6,6 +6,5 @@ Paper: "How to make a giant rodent: Genomic basis and tradeoffs of gigantism in 
 
 Contents:
 1. PCA of protein families
-2. Gene family expansion
+2. Gene family expansion analysis
 3. Genome-wide mutation load
-4. Unique-capybara residues
