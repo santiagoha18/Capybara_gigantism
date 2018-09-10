@@ -1,0 +1,224 @@
+---
+title: "Genome-wide analysis of mutation load in Capybara genome"
+author: "Santiago Herrera-Alvarez"
+date: "September 9, 2018"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    highlight: kate
+geometry: margin=2cm
+fontsize: 10pt
+---
+
+```{r knitr, echo=FALSE}
+knitr::opts_chunk$set(
+  comment   = "#",
+  results   = "hold",
+  # collapse  = TRUE,
+  fig.align = "center",
+  cache=FALSE,
+  message = FALSE,
+  warning = FALSE,
+  tidy= TRUE,
+  tidy.opts=list(width.cutoff=80))
+```
+
+```{r}
+library(ggplot2)
+library(Rmisc)
+library(cowplot)
+library(phytools)
+library(geiger)
+```
+
+### Analysis of $d_N/d_S$ ($\omega$) values accross rodent genomes
+
+```{r}
+#Open file with dN/dS values
+dat <- read.csv("../omega_values.csv")
+
+#Extract each set of omegas per species, and remove outliers
+capybara <- dat$Capybara
+squirrel <- dat$Squirrel
+guineaPig <- dat$GuineaPig
+chinchilla <- dat$Chinchilla
+degu <- dat$Degu
+NMrat <- dat$NMRat
+mouse <- dat$Mouse
+rat <- dat$Rat
+vole <- dat$Vole
+deermouse <- dat$DeerMouse
+hamster <- dat$Hamster
+BMrat <- dat$BMRat
+jerboa <- dat$Jerboa
+kangrat <- dat$KangRat
+marmota <- dat$Marmota
+castor <- dat$Castor
+
+wR <- c(squirrel,guineaPig,chinchilla,degu,NMrat,mouse,rat,vole,deermouse,hamster,BMrat,jerboa,kangrat,marmota,castor)
+wR = wR[wR>=-0.5 & wR<=2]
+
+wC <- capybara
+wC = wC[wC>=-0.5 & wC<=2]
+
+w <- c(wC,wR)
+spp <- rep(c("Capybara","Other rodents"),c(226,3378))
+
+dat.omega <- data.frame(w,spp)
+dat.omega$ln.w <- log(w)
+
+mean.wC <- mean(wC)
+mean.wR <- mean(wR)
+means <- c(mean.wC,mean.wR)
+tax <- c("Capybara","Other rodents")
+m <- data.frame(tax,means)
+```
+
+### Density plot of the distribution of $d_N/d_S$ values for each species:
+
+```{r}
+library(ggplot2)
+
+spp2 <- rep(c("Hhyd","Itri","Cpor","Clan","Odeg","Hgla","Mmus","Rnor",
+             "Mocr","Pman","Maur","Ngal","Jjac","Dord","Mmar","Ccan"),
+           c(length(capybara),length(squirrel),length(guineaPig),length(chinchilla),
+             length(degu),length(NMrat),length(mouse),length(rat),length(vole),
+             length(deermouse),length(hamster),length(BMrat),length(jerboa),length(kangrat),
+             length(marmota),length(castor)))
+
+w_spp <- c(capybara,squirrel,guineaPig,chinchilla,degu,NMrat,mouse,rat,vole,deermouse,hamster,BMrat,jerboa,kangrat,marmota,castor)
+
+dat.omega2 <- data.frame(w_spp,spp2)
+
+ggplot(dat.omega2, aes(x=w_spp)) + geom_density(aes(group=spp2,colour=spp2,fill=spp2),alpha=0.25)+   scale_x_continuous(limits = c(-0.2, 2)) + labs(x="Nuclear dN/dS", y="Density") + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=13),axis.text.y = element_text(face="bold", size=13), axis.title.y = element_text(face="bold", size=20),axis.title.x = element_text(face="bold", size=20)) + theme(legend.position = c(0.7, 0.55),legend.background = element_rect(color = "black",fill = "white", size = 1, linetype = "solid"), legend.title = element_text(size=8,face="bold"),legend.text=element_text(size=9))
+```
+
+### Density plot of the distribution of $dN/dS$ values per group
+```{r}
+ggplot(dat.omega, aes(x=w)) + geom_density(aes(group=spp,colour=spp,fill=spp),alpha=0.7)+ scale_x_continuous(limits = c(-0.2, 2)) + labs(x="Nuclear dN/dS", y="Density")+scale_fill_manual(values=c("deepskyblue", "darkolivegreen1"), name="Taxon")+scale_color_manual(values=c("black", "black"),name="Taxon") + theme(legend.position = c(0.7, 0.7),legend.background = element_rect(color = "black", fill = "white", size = 1, linetype = "solid"),legend.title = element_text(size=16, face="bold"),legend.text=element_text(size=16)) + geom_vline(data=m, aes(xintercept=means, colour=tax),linetype="dashed")+ theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=13),axis.text.y = element_text(face="bold", size=13), axis.title.y = element_text(face="bold", size=20),axis.title.x = element_text(face="bold", size=20))
+```
+
+## Bootstrap analysis:
+Re-sampling of $d_N/d_S$ values per group (Capybara vs. Other rodents) and comparison of mean $d_N/d_S$ values between both groups.
+```{r}
+boot_Capybara=NULL
+n = 1000
+for (i in 1:n) {
+  remuestreo=sample(wC,length(wC),replace=T)
+  new_mean=mean(remuestreo)
+  boot_Capybara=c(boot_Capybara,new_mean)
+}
+
+boot_Rodents=NULL
+for (i in 1:n) {
+  remuestreo=sample(wR,length(wR),replace=T)
+  new_mean=mean(remuestreo)
+  boot_Rodents=c(boot_Rodents,new_mean)
+}
+
+sp <- rep(c("Other Rodents","Capybara"),each=1000)
+omegas <- c(boot_Rodents,boot_Capybara)
+tW <- data.frame(sp,omegas)
+tb <- summarySE(tW,measurevar="omegas",groupvars="sp",conf.interval=.99)
+
+#95% Confidence interval
+tb$ci95 <- tb$se*1.96 
+
+print(tb)
+
+t.test(boot_Rodents,boot_Capybara)
+```
+
+
+### Violin plot of the re-sampled means
+```{r}
+ggplot(tW, aes(x=sp, y=omegas)) + geom_violin(trim=FALSE,fill="gray") + geom_boxplot(width=0.1)+ xlab("Taxon") + ylab("Mean nuclear dN/dS")+ theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=15),axis.text.y = element_text(face="bold", size=15), axis.title.y = element_text(face="bold", size=20),axis.title.x = element_text(face="bold", size=20))+ annotate("text",x=2,y=0.19,label='italic(P) == 2.2e-16',parse=TRUE,size=7)
+```
+
+
+## Permutation (Monte Carlo) Test
+
+A permutation test was performed to confirm the elevated genome-wide $d_N/d_S$ on the capybara relative to the rest of rodents: $d_N/d_S$ values of both groups were randomized to create a null distribution of the differences of means.
+
+```{r}
+n=10000
+wT=c(wC,wR)
+null_dist=NULL
+for (i in 1:n) {
+  remuestreo_cap=sample(wT,length(wC),replace=T)
+  meanC=mean(remuestreo_cap)
+  remuestreo_rod=sample(wT,length(wR),replace=T)
+  meanR=mean(remuestreo_rod)
+  diff=meanC-meanR
+  null_dist=c(null_dist,diff)
+}
+
+diff_real <- mean(wC)-mean(wR)
+
+pval <- sum(null_dist>=diff_real)/n
+print(paste("P-value: ",pval))
+
+#Red line represents the observed value
+hist(null_dist,xlim=c(-0.06,0.06),xlab=expression(paste(omega, " Capybara - ", omega, " Rodents")),main=expression(paste("Null distribution of differences in ", omega)))
+abline(v=diff_real,col="red",lwd=2)
+```
+
+## Correlation of Body mass with mean $d_N/d_S$ 
+
+We performed a correlation of the mean $d_N/d_S$ values observed in each species with the body mass, to understand how body mass affects genome evolution, particularly, the accumulation of slightly deleterious mutations.
+
+To control by the potential counfunding effect of shared ancestry, we performed a Phylogenetic Independet Constrast (PIC; Felsenstein, 1985).
+
+```{r}
+tr <- read.tree("../OrthoMaM_370-SCOs_17genomes_RAxML.tre")
+omegaBM <- read.csv("../omegaNuc_vs_bodyMass.csv",row.names=2)
+
+omega<-setNames(omegaBM$omega,rownames(omegaBM))
+ln.mass <- setNames(omegaBM$ln.masa,rownames(omegaBM))
+tr.masaOmega<-drop.tip(tr,name.check(tr,omega)$tree_not_data)
+
+#PIC's body mass and nuclear dN/dS
+IC.logMass<-pic(ln.mass,tr.masaOmega)
+IC.Omega<-pic(omega,tr.masaOmega)
+
+mod <- lm(IC.Omega~IC.logMass)
+summary(mod)
+
+#library(gvlma)
+#Assessment of linear model assumptions
+#g <- gvlma(mod) 
+#summary(g)
+
+d <- data.frame(ln.mass,omega)
+ggplot(d, aes(x=ln.mass, y= omega)) + geom_point(color="black") + geom_smooth(method = "lm", se = TRUE) + xlab("Ln(Body Mass)") + ylab("mean dN/dS") + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=10),axis.text.y = element_text(face="bold", size=10), axis.title.y = element_text(face="bold", size=20),axis.title.x = element_text(face="bold", size=20))
+```
+
+## Correlation of mean nuclear $d_N/d_S$ and mean mitochondrial $d_N/d_S$
+
+To corroborate that the mutation load was caused by a demographic effect, we performed a correlation of the mean $nuc_\omega$ vs mean $mt_\omega$, under the hypothesis that demographic bottlenecks should affect both genomes (Piganeau & Eyre-Walker, 2009).
+
+```{r}
+omega_mt_nuc <- read.csv("../omegaMt_Nuc_vs_bodyMass.csv",row.names=2)
+
+# PICs dN/dS  mitochondrial vs nuclear genomes
+omegaNUC<-setNames(omega_mt_nuc$omega.nuc_229gen,rownames(omega_mt_nuc))
+omegaMT <- setNames(omega_mt_nuc$omega.mt,rownames(omega_mt_nuc))
+tr.masaOmega<-drop.tip(tr,name.check(tr,omegaNUC)$tree_not_data)
+
+IC.mt<-pic(omegaMT,tr.masaOmega)
+IC.nuc<-pic(omegaNUC,tr.masaOmega)
+d <- data.frame(IC.mt,IC.nuc)
+
+p1 <- ggplot(d, aes(x = IC.nuc, y = IC.mt))
+temp1 <- expression(rho ==  0.7)
+p1 + geom_point(color="black") + geom_smooth(method = "lm", se = TRUE)  + labs(x="Nuclear dN/dS ", y = "Mitochondrial dN/dS") + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=13),axis.text.y = element_text(face="bold", size=13), axis.title.y = element_text(face="bold", size=20),axis.title.x = element_text(face="bold", size=20)) + annotate("text",x=-0.1,y=0.1,label=as.character(temp1),parse=TRUE,size=6,fontface=2) + annotate("text",x=-0.1,y=0.06,label="italic(P) == 0.04",parse=TRUE,size=6,fontface=2)
+
+
+cor.test(d$IC.nuc,d$IC.mt,method="spearman")
+```
+
+
+
+
+
