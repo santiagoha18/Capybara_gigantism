@@ -51,24 +51,24 @@ omega <- as.numeric(levels(omega))[omega]
 mask <- omega > 1
 above1 <- dnds_filt[mask,]
 
-#Choose the guinea pig ensembl database
-ensembl=useMart("ensembl")
-ensembl_cavia=useMart("ensembl",dataset="cporcellus_gene_ensembl")
+#Genes with dN/dS > 1
 
-gPigIDs <- above1$V2
-genesAbove1 <- getBM(attributes=c("ensembl_peptide_id","external_gene_name"),filters="ensembl_peptide_id",values=as.character(gPigIDs),mart=ensembl_cavia)
-
-head(genesAbove1)
+read.csv("../Capybara-GuineaPig/dnds_above_1_pairwise_GuineaPig_Capybara.csv")
 ```
 
 ## Computation of GO enrichment test for genes that showed a $d_N/d_S$ value > 1
 
 ```{r}
+#Choose Guinea pig Ensembl database
+ensembl=useMart("ensembl")
+ensembl_cavia=useMart("ensembl",dataset="cporcellus_gene_ensembl")
+
 #Extract GO annotations for ALL genes
 all_ids <- dnds_filt$V2
 genesAll <- getBM(attributes=c("ensembl_peptide_id","external_gene_name","go_id","goslim_goa_description"),filters="ensembl_peptide_id",values=as.character(all_ids),mart=ensembl_cavia)
 
 #Extract GO annotations for genes with dN/dS ratio > 1
+gPigIDs <- above1$V2
 genesAbove1 <- getBM(attributes=c("ensembl_peptide_id","external_gene_name","go_id","goslim_goa_description"),filters="ensembl_peptide_id",values=as.character(gPigIDs),mart=ensembl_cavia)
 
 #Fisher's exact test (GO enrichment test)
@@ -114,14 +114,15 @@ omegaCGP <- dnds_filt2$V4
 omegaCGP <- as.numeric(levels(omegaCGP))[omegaCGP]
 
 #Compute ratios
-ratio <- c()
-for(i in 1:length(omegaCGP)){
-  temp <- omegaCGP[i]/omegaGPR[i]
-  if(temp == "NaN"){
-    temp <- 0
-  }
-  ratio <- c(ratio,temp)
-}
+ratio <- omegaCGP/max(omegaGPR)
+##ratio <- c()
+#for(i in 1:length(omegaCGP)){
+#  temp <- omegaCGP[i]/omegaGPR[i]
+#  if(temp == "NaN"){
+#    temp <- 0
+#  }
+#  ratio <- c(ratio,temp)
+#}
 dnds_filt2$ratio <- ratio
 
 #Extract genes on the top 5% of the distribution of ratios
@@ -162,7 +163,7 @@ fisherPvalues_out_Bonferroni <- p.adjust(fisherPvalues_out,method="bonferroni",n
 out_fisherResults <- data.frame(GO_term,fisherPvalues_out,fisherPvalues_out_Bonferroni)
 significativas_out2 <- out_fisherResults[out_fisherResults$fisherPvalues_out_Bonferroni<0.05,]
 
-head(significativas_out2)
+significativas_out2
 ```
 
 
