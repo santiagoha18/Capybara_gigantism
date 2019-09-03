@@ -34,6 +34,7 @@ library(biomaRt)
 library(dplyr)
 library(ggpubr)
 library(ggrepel)
+library(reshape)
 ```
 
 ### Analysis of $d_N/d_S$ ($\omega$) values accross rodent genomes
@@ -436,6 +437,33 @@ label <- expression(paste(rho," = 0.53"))
 c <- ggplot(d3, aes(x=IC.logMass, y=IC.logGT)) + geom_point(color="black") + geom_smooth(method = "lm", se = TRUE) + xlab("Ln(BM)") + ylab("Ln(GT)") + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=10),axis.text.y = element_text(face="bold", size=10), axis.title.y = element_text(face="bold", size=20),axis.title.x = element_text(face="bold", size=20)) + ggtitle("Body mass and generation time") + annotate("text",x=0,y=-5,label=label,parse=TRUE,size=3) + annotate("text",x=0,y=-5.9,label='italic(P) == 0.042',parse=TRUE,size=3)
 
 ggarrange(a,a.1, b, c ,ncol = 2, nrow = 2)
+
+
+labels_rate <- c(
+  "median_omega" = expression(omega), 
+  "median_dn" = "dN", 
+  "median_ds" = "dS"
+)
+
+lnBM <- rep(tab$ln.masa,3)
+tab2 <- dplyr::select(tab,median_omega,median_dn,median_ds) %>% melt()
+tab2$BM <- lnBM
+x <- ggplot(tab2,aes(BM, value, shape=variable,colour=variable, fill=variable)) +
+  geom_smooth(method="lm") +
+  geom_point(size=3) + ggtitle("Body mass and molecular rates") + xlab("Ln(BM)") + ylab("Molecular rate") + scale_shape(labels = labels_rate) + 
+  scale_colour_discrete(labels = labels_rate) + 
+  guides(fill = "none")
+
+lnGT <- rep(tab$ln.gen_time,3)
+tab3 <- dplyr::select(tab,median_omega,median_dn,median_ds) %>% melt()
+tab3$GT <- lnGT
+y <- ggplot(tab3,aes(GT, value, shape=variable,colour=variable, fill=variable)) +
+  geom_smooth(method="lm") +
+  geom_point(size=3) + ggtitle("Generation time and molecular rates") + xlab("Ln(GT)") + ylab("Molecular rate") + scale_shape(labels = labels_rate) + 
+  scale_colour_discrete(labels = labels_rate) + 
+  guides(fill = "none")
+
+ggarrange(x,y, ncol = 2, nrow = 1)
 ```
 
 The elevated $\omega$ in the capybara seems to still be compatible with the assumption of mutation load caused by higher genetic drift relative purifying selection: the capybara seems to have comparatively a higher number of fixed nearly deleterious mutations despite a lower synonymous substitution rate. Interestingly, however, the effect might be driven by the longer generation time (correlated to the size) which causes an overall lower $d_S$.
@@ -711,13 +739,29 @@ a <- ggplot(dat.omega, aes(x=w)) + geom_density(aes(group=spp,colour=spp,fill=sp
 
 d4 <- data.frame(ln.mass,ln.GT)
 label <- expression(paste(rho," = 0.53"))
-b <- ggplot(d4, aes(x=ln.mass, y=ln.GT)) + geom_point(color="black") + geom_smooth(method = "lm", se = TRUE) + xlab("Ln(BM)") + ylab("Ln(GT)") + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=10),axis.text.y = element_text(face="bold", size=10), axis.title.y = element_text(face="bold", size=20),axis.title.x = element_text(face="bold", size=20)) + annotate("text",x=5,y=7.3,label=label,parse=TRUE,size=3.5) + annotate("text",x=5,y=7,label='italic(P) == 0.04',parse=TRUE,size=3.5)
+b <- ggplot(d4, aes(x=ln.mass, y=ln.GT)) + geom_point(color="black") + geom_smooth(method = "lm", se = TRUE,colour="black") + xlab("Ln(BM)") + ylab("Ln(GT)") + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=10),axis.text.y = element_text(face="bold", size=10), axis.title.y = element_text(face="bold", size=20),axis.title.x = element_text(face="bold", size=20)) + annotate("text",x=5,y=7.3,label=label,parse=TRUE,size=3.5) + annotate("text",x=5,y=7,label='italic(P) == 0.04',parse=TRUE,size=3.5)
 
 tab2 <- tab[-16,]
 d <- data.frame(tab2$ln.masa,tab2$median_omega)
-c <- ggplot(d, aes(x=tab2.ln.masa, y= tab2.median_omega)) + geom_point(color="black") + geom_smooth(method = "lm", se = TRUE) + xlab("Ln(BM)") + ylab(expression(paste("median ",omega))) + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=10),axis.text.y = element_text(face="bold", size=10), axis.title.y = element_text(face="bold", size=20),axis.title.x = element_text(face="bold", size=20)) + annotate("text",x=7,y=0.095,label='italic(P) == 0.0011',parse=TRUE,size=3.5) + annotate("text",x=7,y=0.10,label=expression(paste("R"^2, " = 0.56")),parse=TRUE,size=3.5)
+c <- ggplot(d, aes(x=tab2.ln.masa, y= tab2.median_omega)) + geom_point(color="black") + geom_smooth(method = "lm", se = TRUE,colour="black") + xlab("Ln(BM)") + ylab(expression(paste("median ",omega))) + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=10),axis.text.y = element_text(face="bold", size=10), axis.title.y = element_text(face="bold", size=20),axis.title.x = element_text(face="bold", size=20)) + annotate("text",x=7,y=0.095,label='italic(P) == 0.0011',parse=TRUE,size=3.5) + annotate("text",x=7,y=0.10,label=expression(paste("R"^2, " = 0.56")),parse=TRUE,size=3.5)
 
-ggarrange(b,c,a, ncol = 3, nrow = 1,labels = c("A","B","C"))
+lnBM <- rep(tab2$ln.masa,2)
+tab3 <- dplyr::select(tab,median_dn,median_ds) %>% melt()
+tab3$BM <- lnBM
+e <- ggplot(tab3,aes(BM, value, shape=variable, fill=variable, colour=variable)) +
+  geom_smooth(method="lm",colour="black", fill = "gray") +
+  geom_point(size=3) + xlab("Ln(BM)") + ylab("Molecular distance") + scale_shape_manual(labels = labels_rate, values = c(19,17)) + 
+  scale_color_manual(labels = labels_rate, values=c("#0072B2","#D55E00")) +
+  theme(panel.background = element_rect(fill = "white", colour = "black"), 
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+          axis.text.x = element_text(face="bold", size=10), 
+          axis.text.y = element_text(face="bold", size=10), 
+          axis.title.y = element_text(face="bold", size=20), 
+          axis.title.x = element_text(face="bold", size=20)) +
+  theme(legend.title = element_blank(), legend.position = c(0.6, 0.8)) +
+  guides(fill = "none")
+
+ggarrange(b,c,e, ncol = 3, nrow = 1,labels = c("A","B","C"))
 
 ###Fig S6 (usar quartz() para dibujar figura)
 box <- ggplot(gc_table, aes(x=gene_class, y=gc)) + geom_violin(trim=FALSE,fill="gray") + geom_boxplot(width=0.1) + 
