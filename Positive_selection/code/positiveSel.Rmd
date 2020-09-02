@@ -1,7 +1,7 @@
 ---
 title: "Positive selection scan on Capybara genome"
 author: "Santiago Herrera-Alvarez"
-date: "September 9, 2018"
+date: "September 2, 2020"
 output:
   html_document:
     df_print: paged
@@ -30,15 +30,16 @@ library(biomaRt)
 library(ggrepel)
 library(MCMCtreeR) #remotes::install_github("PuttickMacroevolution/MCMCtreeR")
 library(ggtree) #BiocManager::install("ggtree")
-library(dplyr)
+library(tidyverse)
+library(qvalue)
 ```
 
 ## Data: LRTs and PDIs
-Amino acid sites within a protein may experience different selective pressures and have different underlying $d_N/d_S$ ratios (Yang et al., 2000). We fitted branch-site models to identify positive selection in a set of 4,452 SCOs obtained using the OrthoVenn software (Wang et al., 2015) on capybara versus four closely related rodents with published whole genome sequences: naked mole rat, degu, chinchilla and guinea pig. **NOTE: results of LRTs and PDIs for each of the 4,452 SCOs are available in the table `LRs-PDI`. The p-values correspond to each LRT**
+Amino acid sites within a protein may experience different selective pressures and have different underlying $d_N/d_S$ ratios (Yang et al., 2000; Smith et al. 2015). We fitted branch-site models to identify positive selection in a set of 4,452 SCOs obtained using the OrthoVenn software (Wang et al., 2015) on capybara versus four closely related rodents with published whole genome sequences: naked mole rat, degu, chinchilla and guinea pig.
 
-+ **LRTs**: Likelihood-ratio tests (LRT) between two models of codon evolution were used as a measure of model fit: a branch-site model (model A) in which attempts to detect positive selection acting on a few sites on specified lineages or 'foreground branches' ($d_N/d_S$>1), versus the null model (A null) in which codons can only evolve neutrally ($d_N/d_S$ =1) or under purifying selection (0< $d_N/d_S$ <1; Zhang et al., 2005).
++ **LRTs**: Likelihood-ratio tests (LRT) between two models of codon evolution were used as a measure of model fit: 1) a branch-site model (model A) which attempts to detect positive selection acting on a few sites on specified lineages or 'foreground branches' ($d_N/d_S$>1), versus the null model (A null) in which codons can only evolve neutrally ($d_N/d_S$ =1) or under purifying selection (0< $d_N/d_S$ <1; Zhang et al., 2005); 2) an adaptive branch-site random effects model (aBSREL; Smith et al. 2015) which determines the proportion of sites with $d_N/d_S$>1 on the foreground branch relative to a null model (0< $d_N/d_S$ =<1). **NOTE: results of LRTs for each of the 4,452 SCOs are available in the table `LR_Pval_codeml_absrel.csv`. The p-values correspond to each LRT**
 
-+ **PDI**: ((Capybara, guinea pig), degu) protein trios where used to estimate the difference of the raw p-distance in protein sequence between capybara and (pdCD), and the raw p-distance between guinea pig and degu (pdGD). These two distances were used to calculate the 'protein distance index' or PDI for each (PDIi = pdCDi - pdGDi) which takes a value of zero if the two p-distances are equal, meaning that the capybara and guinea pig lineages have evolved at equal rates since their divergence from their most recent common ancestor (MRCA). A positive value is indicative of accelerated protein evolution in the capybara lineage.
++ **PDI**: ((Capybara, guinea pig), degu) protein trios where used to estimate the difference of the raw p-distance in protein sequence between capybara and (pdCD), and the raw p-distance between guinea pig and degu (pdGD). These two distances were used to calculate the 'protein distance index' or PDI for each (PDIi = pdCDi - pdGDi) which takes a value of zero if the two p-distances are equal, meaning that the capybara and guinea pig lineages have evolved at equal rates since their divergence from their most recent common ancestor (MRCA). A positive value is indicative of accelerated protein evolution in the capybara lineage. **NOTE: results of PDI for each of the 4,452 SCOs are available in the table `genetic_dists.csv`.**
 
 ```{r, echo=FALSE}
 tr <- readMCMCtree("../Rodent_phylogenomic_MCMCtree.tre")
@@ -53,65 +54,101 @@ flip(p2,30,20)
 
 ### Exploratory analysis
 
-**NOTE: The file `LRs-dists.csv` contains the following information: SCO-cluster name, LRT value, p-value of LRT, Tamura-Nei distance for DNA seqs, protein raw-p distance, Guinea pig ensembl prot id, gene name**
+**NOTE: The file `genetic_dists.csv` contains the following information: SCO-cluster name, Guinea pig ensembl prot id, Tamura-Nei distance for DNA seqs, and protein raw-p distance**
 
 Tamura-Nei distances of DNA sequences and raw-p distances were computed on ((Capybara, guinea pig), degu) orthologs.
 
 ```{r, echo=FALSE, warning=FALSE,message=FALSE}
-t <- read.csv("../LRs-dists.csv",h=TRUE)
+t <- read.csv("../genetic_dists.csv",h=TRUE)
 
-#Quick and exploratory plot of Tamura-Nei distance vs, raw-p distance. Note the tight positive correlation between both measures.
-d <- t$DNA_tamura.nei.D
-d <- as.numeric(levels(d))[d]
-t$D_TN <- d
-dp <- t$prot_pdistance
-dp <- as.numeric(levels(dp))[dp]
-t$D_prot <- dp
-t2 <- t[complete.cases(t), ]
-t2 <- t2[!(t2$LR<0),]
+#Quick and exploratory plot of Tamura-Nei distance vs, raw-p distance. Note the tight positive correlation between both statistics.
+t <- t[complete.cases(t), ]
 
-ggplot(t2, aes(x=D_TN, y=D_prot)) + geom_point() + geom_smooth() + xlab("Tamura-Nei distance") + ylab("Protein raw-p distance")
+ggplot(t, aes(x= D_stat_DNA, y=D_stat_prot)) + geom_point() + geom_smooth() + xlab("Tamura-Nei distance") + ylab("Protein raw-p distance")
 ```
+
+## model A (codeml) and aBSREL (HyPhy) results are strongly correlated
+
+```{r, warning=FALSE, echo=FALSE}
+#Import results from Branch-site tests: codeml model A and aBSREL
+bs <- read.csv("../LR_Pval_codeml_absrel.csv",h=TRUE)
+
+#Combine the two datasets
+tcombined <- merge.data.frame(t,bs,by="Cluster")
+t2 <- tcombined[complete.cases(tcombined), ]
+```
+
+We used two different (widely used) Branch-Site models: 1) model A of codeml (PAML) and 2) aBSREL (HyPhy). Below is shown the rank-order correlation of the Likelihood-ratio tests obtained from both models, as well as the number of putatively selected genes in the capybara based on FDR and Bonferroni correction.
+
+```{r, warning=FALSE, echo=FALSE}
+#Genes under positive selection under codeml model A
+pvals_codeml <- t2$Pval_codeml[t2$Pval_codeml<1]
+hist(pvals_codeml)
+qobj1 <- qvalue(p=pvals_codeml)
+print(paste("Number of genes under positive selection under codeml model A with an FDR of 0.01: ", sum(qobj1$qvalues<0.01)))
+
+pval_bonferroni_codeml <- p.adjust(pvals_codeml,method = "bonferroni",n = length(pvals_codeml))
+print(paste("Number of genes under positive selection under codeml model A after Bonferroni correction < 0.01: ", sum(pval_bonferroni_codeml<0.01)))
+```
+```{r, warning=FALSE, echo=FALSE}
+#Genes under positive selection under aBSREL
+pvals_absrel <- t2$Pval_aBSREL[t2$Pval_aBSREL<1]
+hist(pvals_absrel)
+print("Cannot compute qvalues for truncated p-value distributions")
+
+pval_bonferroni_absrel <- p.adjust(pvals_absrel,method = "bonferroni",n = length(pvals_absrel))
+print(paste("Number of genes under positive selection under aBSREL after Bonferroni correction < 0.01: ", sum(pval_bonferroni_absrel<0.01)))
+```
+```{r, warning=FALSE, echo=FALSE}
+#Correlation of LR values under both models
+mod <- lm(t2$LR_aBSREL~t2$LR_codeml)
+plot(t2$LR_codeml,t2$LR_aBSREL,pch=16,ylab="LR aBSREL",xlab="LR codeml")
+abline(mod,col="red")
+cor.test(t2$LR_codeml,t2$LR_aBSREL)
+wilcox.test(t2$LR_codeml,t2$LR_aBSREL)
+```
+
 
 ## Plot of the genes on a two-dimension graph with coordinates x=LR, y=PDI
 
-We considered genes in the top 5% of the distribution in both dimensions (i.e., the LRTs of branch-site models and the PDI statistic) as positively selected in the capybara lineage.
+We considered genes in the top 5% of the distribution in both dimensions (i.e., the LRTs of branch-site models and the PDI statistic) as positively selected in the capybara lineage. We used a standardized PDI statistic to account for differences in the rates of evolution between proteins.
 
 ```{r, warning=FALSE, echo=FALSE}
-#Raw PDI data
-raw.t <- read.csv("../ProtDNA_dists_results_OrthoVennHystricognathi.out",h=FALSE,sep="\t")
-colnames(raw.t) <- c("Gen","CD","GPD","D_stat_DNA","CDp","GPDp","D_stat_prot")
-
 #Standardization of PDI statistic: PDI/GPD. 
-#Rationale: A PDI of 0.1 can be caused by 0.2-0.1 or 0.9-0.8 (CD-GPD, respectively). In the first case the CD value is 2x the GPD value. 
+#Rationale: A PDI of 0.1 can be caused by 0.2-0.1 or 0.9-0.8 (CD-GPD, respectively). In the first case the CD value is 2x the GPD value implying higher relative rate of evolution.
 
 D_stat_prot_Stand <- c()
-for(i in 1:length(raw.t$D_stat_prot)){
+for(i in 1:length(t2$D_stat_prot)){
   q <- NULL
-  if(raw.t$GPDp[i] == 0) q <- raw.t$D_stat_prot[i]*10
-  else q <- raw.t$D_stat_prot[i]/raw.t$GPDp[i]
+  if(t2$GPDp[i] == 0) q <- t2$D_stat_prot[i]*10
+  else q <- t2$D_stat_prot[i]/t2$GPDp[i]
   D_stat_prot_Stand <- c(D_stat_prot_Stand,q)
 }
-raw.t$D_stat_prot_Stand <- D_stat_prot_Stand
+t2$D_stat_prot_Stand <- D_stat_prot_Stand
 
-#Combine the two datasets
-tcombined <- inner_join(raw.t,t,by="Gen")
-
-t2 <- tcombined[complete.cases(tcombined), ]
-t2 <- t2[!(t2$LR<0),]
-
-#Extract the genes on the top 5% of the distribution of both axes
-labels=t2[t2$LR>=quantile(t2$LR,0.95) & t2$D_stat_prot_Stand>=quantile(t2$D_stat_prot_Stand,0.95),]
+#Extract the genes on the top 5% of the distribution of both axes: model A codeml
+t3 <- t2[!(t2$LR_codeml<0),]
+labels=t3[t3$LR_codeml>=quantile(t3$LR_codeml,0.95) & t3$D_stat_prot_Stand>=quantile(t3$D_stat_prot_Stand,0.95),]
 
 #Labels for genes related to growth, skeletal and limb development
-skeleton <- t2[t2$gene_name=="SMAD6" |  t2$gene_name=="ACVR1B" | t2$gene_name=="BMPR1A" | t2$gene_name=="DEAF1" | t2$gene_name=="TAPT1" , ]
-cell_prol_growth <- t2[t2$gene_name=="PLAGL2", ]
-limb <- t2[t2$gene_name=="OSR1" | t2$gene_name=="MEOX2", ]
-label_insulin <- t2[t2$gene_name=="Ins",]
+skeleton <- t3[t3$gene_name=="SMAD6" |  t3$gene_name=="ACVR1B" | t3$gene_name=="BMPR1A" | t3$gene_name=="DEAF1" | t3$gene_name=="TAPT1" , ]
+cell_prol_growth <- t3[t3$gene_name=="PLAGL2", ]
+limb <- t3[t3$gene_name=="OSR1" | t3$gene_name=="MEOX2", ]
+label_insulin <- t3[t3$gene_name=="Ins",]
 
+ggplot(t3, aes(LR_codeml,D_stat_prot_Stand)) + geom_point(colour="grey87") + geom_point(data=labels, aes(x=LR_codeml, y=D_stat_prot_Stand), colour="#666666") + geom_point(data=skeleton, aes(x=LR_codeml, y=D_stat_prot_Stand), colour="#990066",size=3) + geom_point(data=cell_prol_growth, aes(x=LR_codeml, y=D_stat_prot_Stand), colour="#FFCC00",size=3) + geom_point(data=limb, aes(x=LR_codeml, y=D_stat_prot_Stand), colour="#3399FF",size=3) + geom_point(data=label_insulin, aes(x=LR_codeml, y=D_stat_prot_Stand), colour="darkorange1",size=3) + geom_text_repel(data=rbind(skeleton,cell_prol_growth,limb,label_insulin),aes(label=gene_name),fontface = 'bold', color = 'black', box.padding = unit(0.35, "lines"), point.padding = unit(0.5, "lines")) + labs(x="LR branch-site test (model A codeml)", y = "Standardized PDI") + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=13),axis.text.y = element_text(face="bold", size=13), axis.title.y = element_text(face="bold", size=15),axis.title.x = element_text(face="bold", size=15)) + theme(legend.position = c(0.75, 0.6),legend.background = element_rect(color = "black", fill = "white", size = 1, linetype = "solid")) + geom_vline(xintercept = quantile(t3$LR_codeml,0.95), linetype="dotted") + geom_hline(yintercept = quantile(t3$D_stat_prot_Stand,0.95), linetype="dotted") + ylim(0,40)
 
-ggplot(t2, aes(LR,D_stat_prot_Stand)) + geom_point(colour="grey87") + geom_point(data=labels, aes(x=LR, y=D_stat_prot_Stand), colour="#666666") + geom_point(data=skeleton, aes(x=LR, y=D_stat_prot_Stand), colour="#990066",size=3) + geom_point(data=cell_prol_growth, aes(x=LR, y=D_stat_prot_Stand), colour="#FFCC00",size=3) + geom_point(data=limb, aes(x=LR, y=D_stat_prot_Stand), colour="#3399FF",size=3) + geom_point(data=label_insulin, aes(x=LR, y=D_stat_prot_Stand), colour="darkorange1",size=3) + geom_text_repel(data=rbind(skeleton,cell_prol_growth,limb,label_insulin),aes(label=gene_name),fontface = 'bold', color = 'black', box.padding = unit(0.35, "lines"), point.padding = unit(0.5, "lines")) + labs(x="LR branch-site test", y = "Standardized PDI") + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=13),axis.text.y = element_text(face="bold", size=13), axis.title.y = element_text(face="bold", size=15),axis.title.x = element_text(face="bold", size=15)) + theme(legend.position = c(0.75, 0.6),legend.background = element_rect(color = "black", fill = "white", size = 1, linetype = "solid")) + geom_vline(xintercept = quantile(t2$LR,0.95), linetype="dotted") + geom_hline(yintercept = quantile(t2$D_stat_prot_Stand,0.95), linetype="dotted") + ylim(0,40)
+#Extract the genes on the top 5% of the distribution of both axes: aBSREL
+t4 <- t2[!(t2$LR_aBSREL<0),]
+labels2=t4[t4$LR_aBSREL>=quantile(t4$LR_aBSREL,0.95) & t4$D_stat_prot_Stand>=quantile(t4$D_stat_prot_Stand,0.95),]
 
+#Labels for genes related to growth, skeletal and limb development
+skeleton <- t4[t4$gene_name=="SMAD6" |  t4$gene_name=="ACVR1B" | t4$gene_name=="BMPR1A" | t4$gene_name=="DEAF1" | t4$gene_name=="TAPT1" , ]
+cell_prol_growth <- t4[t4$gene_name=="PLAGL2", ]
+limb <- t4[t4$gene_name=="OSR1" | t4$gene_name=="MEOX2", ]
+label_insulin <- t4[t4$gene_name=="Ins",]
+
+ggplot(t4, aes(LR_aBSREL,D_stat_prot_Stand)) + geom_point(colour="grey87") + geom_point(data=labels2, aes(x=LR_aBSREL, y=D_stat_prot_Stand), colour="#666666") + geom_point(data=skeleton, aes(x=LR_aBSREL, y=D_stat_prot_Stand), colour="#990066",size=3) + geom_point(data=cell_prol_growth, aes(x=LR_aBSREL, y=D_stat_prot_Stand), colour="#FFCC00",size=3) + geom_point(data=limb, aes(x=LR_aBSREL, y=D_stat_prot_Stand), colour="#3399FF",size=3) + geom_point(data=label_insulin, aes(x=LR_aBSREL, y=D_stat_prot_Stand), colour="darkorange1",size=3) + geom_text_repel(data=rbind(skeleton,cell_prol_growth,limb,label_insulin),aes(label=gene_name),fontface = 'bold', color = 'black', box.padding = unit(0.35, "lines"), point.padding = unit(0.5, "lines")) + labs(x="LR branch-site test (aBSREL)", y = "Standardized PDI") + theme(panel.background = element_rect(fill = "white", colour = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(face="bold", size=13),axis.text.y = element_text(face="bold", size=13), axis.title.y = element_text(face="bold", size=15),axis.title.x = element_text(face="bold", size=15)) + theme(legend.position = c(0.75, 0.6),legend.background = element_rect(color = "black", fill = "white", size = 1, linetype = "solid")) + geom_vline(xintercept = quantile(t4$LR_aBSREL,0.95), linetype="dotted") + geom_hline(yintercept = quantile(t4$D_stat_prot_Stand,0.95), linetype="dotted") + ylim(0,40)
 ```
 
 Interestingly, Insulin is not positevely selected in the capybara, although it has been shown to have signatures of positive selection in caviomorph rodents (Opazo et al., 2005). However, insulin transcription and secretion mediated by PDX1 (see pairwise comparisons) may be part of the underlying mechanism regulating body size evolution in the capybara.
@@ -122,8 +159,8 @@ Interestingly, Insulin is not positevely selected in the capybara, although it h
 ensembl=useMart("ensembl")
 ensembl_cavia=useMart("ensembl",dataset="cporcellus_gene_ensembl")
 
-all <- t2$ensmbl_CporID
-outliers <- labels$ensmbl_CporID
+all <- t3$ensmbl_CporID.x
+outliers <- labels$ensmbl_CporID.x
 
 #Extract GO annotations for the 39 genes under positive selection
 out_genes <- getBM(attributes=c("ensembl_peptide_id","external_gene_name","go_id","goslim_goa_description"),filters="ensembl_peptide_id",values=as.character(outliers),mart=ensembl_cavia)
