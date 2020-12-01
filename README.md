@@ -1,6 +1,6 @@
 *Scripts used to analyze the genome of the capybara*
 
-**Paper: Herrera-Álvarez, S., Karlsson, E., Ryder, O. A., Lindblad-Toh, K., & Crawford, A. J. (2018). How to make a rodent giant: Genomic basis and tradeoffs of gigantism in the capybara, the world’s largest rodent. BioRxiv, 424606. https://doi.org/10.1101/424606**
+**Paper: Santiago Herrera-Álvarez, Elinor Karlsson, Oliver A Ryder, Kerstin Lindblad-Toh, Andrew J Crawford, How to make a rodent giant: Genomic basis and tradeoffs of gigantism in the capybara, the world’s largest rodent, Molecular Biology and Evolution, msaa285, https://doi.org/10.1093/molbev/msaa285**
 
 *NOTE: each folder contains a sub-folder called **code** which has a **.html** and **.Rmd** scripts with detailed instructions of the statistical analyses performed in the paper*
 
